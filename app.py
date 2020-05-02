@@ -37,12 +37,19 @@ def main():
     }
     handle_dialog(response, request.json)
     logging.info(f'Response: {response!r}')
-
+    if 'buttons' not in response['response'].keys():
+        response['response']['buttons'] = []
+    response['response']['buttons'].append({'title': "Помощь",
+                                            'hide': True})
     return json.dumps(response)
 
 
 def handle_dialog(res, req):
     user_id = req['session']['user_id']
+
+    if req['request']['original_utterance'] == 'Помощь':
+        res['response']['text'] = 'Данный навык показывает картинки городов!'
+        return
     # если пользователь новый, то просим его представиться.
     if req['session']['new']:
         res['response']['text'] = 'Привет! Назови свое имя!'
