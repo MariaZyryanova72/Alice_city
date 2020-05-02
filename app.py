@@ -2,7 +2,7 @@ from flask import Flask, request
 import logging
 import json
 import random
-
+from geo import get_geo_info
 app = Flask(__name__)
 
 logging.basicConfig(level=logging.INFO)
@@ -53,40 +53,51 @@ def handle_dialog(res, req):
         res['response']['card']['title'] = 'Отгадай город =)'
         res['response']['card']['image_id'] = image_id
         sessionStorage[user_id] = {
-            'city': image_id
+            'city': image_id,
+            'country': ''
         }
         return
 
-    if sessionStorage[user_id]['city'] != '':
+    if sessionStorage[user_id]['country'] != '':
+        if req['request']['original_utterance'].lower() == sessionStorage[user_id]['country'].lower():
+            res['response']['text'] = 'Правильно! Сыграем ещё?'
+            sessionStorage[user_id]['city'] = ''
+            res['response']['buttons'] = [
+                {
+                    'title': 'Да',
+                    'hide': True
+                },
+                {
+                    'title': 'Нет',
+                    'hide': True
+                },
+                {
+                    'title': 'Покажи город на карте',
+                    "url": f"https://yandex.ru/maps/?mode=search&text={ sessionStorage[user_id]['city'] }",
+                    'hide': True
+                }
+            ]
+            sessionStorage[user_id]['city'] = ''
+            sessionStorage[user_id]['country'] = ''
+        else:
+            res['response']['text'] = 'Неверно. Попробуй ещё раз!'
+
+    elif sessionStorage[user_id]['city'] != '':
         city_name = get_city(req)
         if city_name is None:
             res['response']['text'] = \
                 'Я не знаю такого города. Попробуй еще разок!'
 
         else:
-            if cities[sessionStorage[user_id]['city']] == city_name:
+            if cities[sessionStorage[user_id]['city']].lower() == city_name.lower():
                 cities.pop(sessionStorage[user_id]['city'])
                 if cities == {}:
                     res['response']['text'] = 'Вы выиграли!\nПока-пока!'
                     res['response']['end_session'] = True
                     return
-                res['response']['text'] = 'Правильно! Сыграем ещё?'
-                sessionStorage[user_id]['city'] = ''
-                res['response']['buttons'] = [
-                    {
-                        'title': 'Да',
-                        'hide': True
-                    },
-                    {
-                        'title': 'Нет',
-                        'hide': True
-                    },
-                    {
-                        'title': 'Покажи город на карте',
-                        "url": f"https://yandex.ru/maps/?mode=search&text={city_name}",
-                        'hide': True
-                    }
-                ]
+
+                res['response']['text'] = 'Правильно! А в какой стране этот город?'
+                sessionStorage[user_id]['country'] = get_geo_info(city_name)
             else:
                 res['response']['text'] = 'Неверно. Попробуй ещё раз!'
 
@@ -99,7 +110,8 @@ def handle_dialog(res, req):
             res['response']['card']['title'] = 'Отгадай город =)'
             res['response']['card']['image_id'] = image_id
             sessionStorage[user_id] = {
-                'city': image_id
+                'city': image_id,
+                'country': ''
             }
         elif req['request']['command'] == 'Нет':
             res['response']['text'] = 'Пока!'
