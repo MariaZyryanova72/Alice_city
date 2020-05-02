@@ -46,21 +46,31 @@ def handle_dialog(res, req):
     user_id = req['session']['user_id']
     # если пользователь новый, то просим его представиться.
     if req['session']['new']:
-        image_id = random.choice([key for key in cities.keys()])
-        res['response']['text'] = 'Привет!'
-        res['response']['card'] = {}
-        res['response']['card']['type'] = 'BigImage'
-        res['response']['card']['title'] = 'Отгадай город =)'
-        res['response']['card']['image_id'] = image_id
+        res['response']['text'] = 'Привет! Назови свое имя!'
         sessionStorage[user_id] = {
-            'city': image_id,
-            'country': ''
+            'city': '',
+            'country': '',
+            'first_name': None
         }
         return
 
-    if sessionStorage[user_id]['country'] != '':
+    if sessionStorage[user_id]['first_name'] is None:
+        first_name = get_first_name(req)
+        if first_name is None:
+            res['response']['text'] = \
+                'Не расслышала имя. Повтори, пожалуйста!'
+        else:
+            sessionStorage[user_id]['first_name'] = first_name[0].upper() + first_name[1:]
+            image_id = random.choice([key for key in cities.keys()])
+            res['response']['card'] = {}
+            res['response']['card']['type'] = 'BigImage'
+            res['response']['card']['title'] = f'{ sessionStorage[user_id]["first_name"] }, отгадай город =)'
+            res['response']['card']['image_id'] = image_id
+            sessionStorage[user_id]['city'] = image_id
+
+    elif sessionStorage[user_id]['country'] != '':
         if req['request']['original_utterance'].lower() == sessionStorage[user_id]['country'].lower():
-            res['response']['text'] = 'Правильно! Сыграем ещё?'
+            res['response']['text'] = f'Правильно, { sessionStorage[user_id]["first_name"] }! Сыграем ещё?'
             sessionStorage[user_id]['city'] = ''
             res['response']['buttons'] = [
                 {
@@ -80,34 +90,34 @@ def handle_dialog(res, req):
             sessionStorage[user_id]['city'] = ''
             sessionStorage[user_id]['country'] = ''
         else:
-            res['response']['text'] = 'Неверно. Попробуй ещё раз!'
+            res['response']['text'] = f'Неверно, { sessionStorage[user_id]["first_name"] }. Попробуй ещё раз!'
 
     elif sessionStorage[user_id]['city'] != '':
         city_name = get_city(req)
         if city_name is None:
-            res['response']['text'] = \
-                'Я не знаю такого города. Попробуй еще разок!'
+            res['response']['text'] = f' { sessionStorage[user_id]["first_name"] },' \
+                                      f' я не знаю такого города. Попробуй еще разок!'
 
         else:
             if cities[sessionStorage[user_id]['city']].lower() == city_name.lower():
                 cities.pop(sessionStorage[user_id]['city'])
                 if cities == {}:
-                    res['response']['text'] = 'Вы выиграли!\nПока-пока!'
+                    res['response']['text'] = f' { sessionStorage[user_id]["first_name"] }, вы выиграли!\nПока-пока!'
                     res['response']['end_session'] = True
                     return
 
-                res['response']['text'] = 'Правильно! А в какой стране этот город?'
+                res['response']['text'] = f'Правильно,  { sessionStorage[user_id]["first_name"] }!' \
+                                          f' А в какой стране этот город?'
                 sessionStorage[user_id]['country'] = get_geo_info(city_name)
             else:
-                res['response']['text'] = 'Неверно. Попробуй ещё раз!'
+                res['response']['text'] = f'Неверно,  { sessionStorage[user_id]["first_name"] }. Попробуй ещё раз!'
 
     else:
         if req['request']['command'] == 'Да':
             image_id = random.choice([key for key in cities.keys()])
-            res['response']['text'] = 'Продолжаем!'
             res['response']['card'] = {}
             res['response']['card']['type'] = 'BigImage'
-            res['response']['card']['title'] = 'Отгадай город =)'
+            res['response']['card']['title'] = f'{ sessionStorage[user_id]["first_name"] }, отгадай город =)'
             res['response']['card']['image_id'] = image_id
             sessionStorage[user_id] = {
                 'city': image_id,
@@ -117,7 +127,7 @@ def handle_dialog(res, req):
             res['response']['text'] = 'Пока!'
             res['response']['end_session'] = True
         elif req['request']['command'] == 'Покажи город на карте':
-            res['response']['text'] = 'Играем дальше?'
+            res['response']['text'] = f'{ sessionStorage[user_id]["first_name"] }, играем дальше?'
             res['response']['buttons'] = [
                 {
                     'title': 'Да',
@@ -137,6 +147,17 @@ def get_city(req):
         if entity['type'] == 'YANDEX.GEO':
             # возвращаем None, если не нашли сущности с типом YANDEX.GEO
             return entity['value'].get('city', None)
+
+
+def get_first_name(req):
+    # перебираем сущности
+    for entity in req['request']['nlu']['entities']:
+        # находим сущность с типом 'YANDEX.FIO'
+        if entity['type'] == 'YANDEX.FIO':
+            # Если есть сущность с ключом 'first_name',
+            # то возвращаем ее значение.
+            # Во всех остальных случаях возвращаем None.
+            return entity['value'].get('first_name', None)
 
 
 if __name__ == '__main__':
